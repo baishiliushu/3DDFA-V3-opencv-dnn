@@ -54,11 +54,30 @@ def plot_kpts(image, kpts, color = "g"):
         c = (255, 0, 0)
     image = image.copy()
     kpts = kpts.copy()
-    radius = max(int(min(image.shape[0], image.shape[1])/200), 1)
+    radius_based_img = max(int(min(image.shape[0], image.shape[1])/200), 3)
+    max_x = -1.0
+    max_y = -1.0
+    min_x = 99999.0
+    min_y = 99999.0
+
+    
     for i in range(kpts.shape[0]):
         st = kpts[i, :]
-        image = cv2.circle(image,(int(st[0]), int(st[1])), radius, c, radius*2)
+        max_x = max(int(max_x), int(st[0]))
+        max_y = max(int(max_y), int(st[1]))
+        min_x = min(int(min_x), int(st[0]))
+        min_y = min(int(min_y), int(st[1]))
 
+    radius_based_kpts = min((max_x - min_x), (max_y - min_y))
+    radius_based_kpts = radius_based_kpts / 43.5
+    print("[DEBUG]r_area {} v.s. r_jpg {}".format(radius_based_kpts, radius_based_img))
+    radius = min(radius_based_img, int(radius_based_kpts))
+    radius = max(radius, 1)
+    
+    for i in range(kpts.shape[0]):
+        st = kpts[i, :]
+        #image = cv2.circle(image,(int(st[0]), int(st[1])), radius, c, radius*2)
+        image = cv2.circle(image,(int(st[0]), int(st[1])), radius, c, -1)
     return image
 
 def show_seg_visble(new_seg_visible_one, img):

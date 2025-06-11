@@ -8,9 +8,10 @@ from io_ import visualize
 
 
 if __name__=='__main__':
-    args = {"iscrop": True, "detector": "retinaface", "ldm68": True, "ldm106": True, "ldm106_2d": True, "ldm134": True, "seg": True, "seg_visible": True, "useTex": True, "extractTex": True, "backbone": "resnet50"}
-    imgpath = "testimgs/1.jpg"
-
+    # args = {"iscrop": True, "detector": "retinaface", "ldm68": True, "ldm106": True, "ldm106_2d": True, "ldm134": True, "seg": True, "seg_visible": True, "useTex": True, "extractTex": True, "backbone": "resnet50"}  #resnet50 mbnetv3 others own
+    args = {"iscrop": True, "detector": "retinaface", "ldm68": True, "ldm106": False, "ldm106_2d": False, "ldm134": False, "seg": False, "seg_visible": False, "useTex": False, "extractTex": False, "backbone": "resnet50", "backbone_recon": "mbnetv3", "onnx_resource":"own"}
+    imgpath = "testimgs/5.jpg"
+    
     facebox_detector = retinaface()
     recon_model = face_model(args)
 
@@ -18,14 +19,16 @@ if __name__=='__main__':
     
     a = time.time()
     trans_params, im = facebox_detector.detect(srcimg)
+
     results = recon_model.forward(im)
     b = time.time()
-    print(f'#### one image Total waste time: {(b-a):.3f}s')
 
     my_visualize = visualize(results, args)
     
     img_name = os.path.splitext(os.path.basename(imgpath))[0]
-    save_path = os.path.join(os.getcwd(), 'results', img_name)
+    save_path = os.path.join(os.getcwd(), 'results_' + args["backbone_recon"] + "_" + args["onnx_resource"] + "_seg-{}".format(args["seg"]), img_name)
     os.makedirs(save_path, exist_ok=True)
     my_visualize.visualize_and_output(trans_params, srcimg, save_path, img_name)
+    print("[INFO]save at : {}".format(save_path))
+    print(f'#### one image Total cost time: {(b-a):.3f}s')
     

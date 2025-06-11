@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from utils import process_uv
 from render import MeshRenderer_cpu, MeshRenderer_UV_cpu
-
+import time
 
 def get_colors_from_uv(colors, uv_coords):
     res = bilinear_interpolate(colors, uv_coords[:, 0], uv_coords[:, 1])
@@ -34,10 +34,28 @@ def bilinear_interpolate(img, x, y):
 
 class face_model:
     def __init__(self, args):
-        self.net_recon = cv2.dnn.readNet("weights/net_recon.onnx")
+        
+        self.args = args
+        print("type is {}\n{}".format(type(self.args), self.args))
+        model_file = None
+        self.net_recon = None
+        if self.args["backbone_recon"] == 'resnet50':
+            model_file = "weights/net_recon.onnx"
+            
+        if self.args["backbone_recon"] == 'mbnetv3':
+            model_file = "weights/net_recon_mbnet.onnx"
+            if self.args["onnx_resource"] == "own":
+                model_file = "weights/3ddfa_v3-mbnetv3_opset11.onnx" # "weights/3ddfa_v3-mbnetv3_opset11-simplify.onnx"
+        
+        self.net_recon = cv2.dnn.readNet(model_file)
+        if self.net_recon is None:
+            print(" cannot load model with: {}".format(self.args["backbone_recon"]))
+            eixt(-1)
+        print("[INFO]load model : {}".format(model_file))
+        
         self.inputsize = 224    ###输入正方形
         model = np.load("weights/face_model.npy",allow_pickle=True).item()
-        self.args = args
+        
 
         # mean shape, size (107127, 1)
         self.u = model["u"].astype(np.float32)
@@ -304,11 +322,22 @@ class face_model:
         return texture
     
     def forward(self, im):
-        input_tensor = cv2.dnn.blobFromImage(im.astype(np.float32) / 255.0)
+        #print("check input :\n{}".format(self.net_recon.getUnconnectedOutLayersNames()))   
+        #print("check output :\n{}".format(self.net_recon.getOutputDetails()))        
+        input_tensor = None
+        if self.args["backbone_recon"] == "mbnetv3":
+            input_tensor = cv2.dnn.blobFromImage(im.astype(np.float32) / 255.0)
+            #input_tensor = cv2.dnn.blobFromImage(im.astype(np.float32) / 255.0, size=(224,224), mean=[0.485, 0.456, 0.406], ddepth=cv2.CV_32F)
+        if self.args["backbone_recon"] == "resnet50":
+            input_tensor = cv2.dnn.blobFromImage(im.astype(np.float32) / 255.0)
         self.net_recon.setInput(input_tensor)
+        
         # Perform inference on the image
+        t1 = time.perf_counter()
         alpha = self.net_recon.forward(self.net_recon.getUnconnectedOutLayersNames())[0]
-
+        #alpha = self.net_recon.forward()[0]
+        print(f'[INFO] one image forward cost time: {((time.perf_counter()-t1)*1000):.1f} ms')
+        
         alpha_dict = self.split_alpha(alpha)
         face_shape = self.compute_shape(alpha_dict["id"], alpha_dict["exp"])
         rotation = self.compute_rotation(alpha_dict["angle"])
