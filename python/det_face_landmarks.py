@@ -208,8 +208,10 @@ class retinaface:
             for idx in [74, 83, 54, 84, 90]:
                 landmarks.append([results[idx][0], results[idx][1]])
             landmarks = np.array(landmarks).astype(np.float32)
-            landmarks[:, -1] = H - 1 - landmarks[:, -1]
 
+            print("[DEBUG]lm org : {}\nshape is {}".format(landmarks, landmarks.shape))
+            landmarks[:, -1] = H - 1 - landmarks[:, -1]
+            print("[DEBUG]lm dst : {}\nshape is {}, with H : {}".format(landmarks, landmarks.shape, H))
             trans_params, im, lm, _ = align_img(rgb_image, landmarks, self.lm3d_std)
             return trans_params, im
         else:
