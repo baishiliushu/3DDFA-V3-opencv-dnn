@@ -18,22 +18,24 @@ def get_lm3d_std():
     return lm3d_std     
     
 
-def align_based_five_landmarks(image, landmarks, lm3d_std):
+def crop_based_five_landmarks(image, landmarks, lm3d_std):
     H = image.shape[0]
     landmarks = np.array(landmarks).astype(np.float32)
     landmarks[:, -1] = H - 1 - landmarks[:, -1]
     trans_params, im, lm, _ = align_img(image, landmarks, lm3d_std)
     return trans_params, im
+
     
-def prepare_recon_face(src, size_=224, landmarks=None):
+    
+def prepare_recon_face(roi, size_=224, landmarks=None):
     # get RGB
-    dst = cv2.cvtColor(srcimg, cv2.COLOR_BGR2RGB) 
+    dst = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB) 
     
     if landmarks is None:
         # check Size  224
-        if (src.shape[0] != size_) or (src.shape[1] != size_):
-            org_shape = src.shape
-            src = cv2.resize(src, (size_, size_))
+        if (dst.shape[0] != size_) or (dst.shape[1] != size_):
+            org_shape = roi.shape
+            dst = cv2.resize(dst, (size_, size_))
             print("[INFO]resized {} TO {}".format(org_shape, src.shape))
     
     # normailize
@@ -41,10 +43,11 @@ def prepare_recon_face(src, size_=224, landmarks=None):
     # 
     trans_params = None
     if landmarks is not None:
-        trans_params, dst = align_based_five_landmarks(dst, landmarks, get_lm3d_std())
+        trans_params, dst = crop_based_five_landmarks(dst, landmarks, get_lm3d_std())
     
     return dst, trans_params
 
+ 
 
 def init_recon():
     args = {"ldm68": True, "ldm106": False, "ldm106_2d": False, "ldm134": False, "seg": False, "seg_visible": False, "useTex": False, "extractTex": False, "backbone_recon": "mbnetv3", "onnx_resource":"own"}
