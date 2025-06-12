@@ -44,13 +44,19 @@ def prepare_recon_face(src, size_=224, landmarks=None):
         trans_params, dst = align_based_five_landmarks(dst, landmarks, get_lm3d_std())
     
     return dst, trans_params
-    
 
-if __name__=='__main__':
+
+def init_recon():
     args = {"ldm68": True, "ldm106": False, "ldm106_2d": False, "ldm134": False, "seg": False, "seg_visible": False, "useTex": False, "extractTex": False, "backbone_recon": "mbnetv3", "onnx_resource":"own"}
     
     recon_model = face_model(args)
+    return recon_model
 
+
+if __name__=='__main__':
+    #0. init model
+    recon_model = init_recon()
+    
     #1. input - prepare
     imgpath = "testimgs/3_det.jpg"
     srcimg = cv2.imread(imgpath)
