@@ -370,7 +370,11 @@ class face_model:
             "uv_coords": self.uv_coords,
             "render_shape": np.transpose(pred_image_shape, (0, 2, 3, 1)),
             "render_face": np.transpose(pred_image, (0, 2, 3, 1)),
-            "render_mask": np.transpose(mask, (0, 2, 3, 1))}
+            "render_mask": np.transpose(mask, (0, 2, 3, 1)),
+            "trans": alpha_dict["trans"],
+            "rot": rotation,
+            "transform": face_shape_transformed
+            }
 
         # compute visible vertice according to normal and renderer
         if self.args["seg_visible"] or self.args["extractTex"]:

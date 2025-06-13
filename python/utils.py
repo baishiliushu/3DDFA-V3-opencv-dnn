@@ -155,3 +155,235 @@ def process_uv(uv_coords, uv_h = 224, uv_w = 224):
     # uv_coords[:,1] = uv_h - uv_coords[:,1] - 1
     uv_coords = np.hstack((uv_coords, np.zeros((uv_coords.shape[0], 1)))) # add z
     return uv_coords
+
+def get_expend_box(x1, y1, x2, y2, enlarge_ratio, height, width):
+    w = x2 - x1 + 1
+    h = y2 - y1 + 1
+
+    cx = (x2 + x1) * 0.5
+    cy = (y2 + y1) * 0.5
+    sz = max(h, w) * enlarge_ratio
+
+    x1 = cx - sz * 0.5
+    y1 = cy - sz * 0.5
+    trans_x1 = x1
+    trans_y1 = y1
+    x2 = x1 + sz
+    y2 = y1 + sz
+
+    dx = max(0, -x1)
+    dy = max(0, -y1)
+    x1 = max(0, x1)
+    y1 = max(0, y1)
+
+    edx = max(0, x2 - width)
+    edy = max(0, y2 - height)
+    x2 = min(width, x2)
+    y2 = min(height, y2)
+    return dy, edy, dx, edx, sz, trans_x1, trans_y1
+
+def face_affine(src, lm_points, average_face_3D = None):
+    
+    return
+
+def align_face_affine_along_roll(face_img, landmarks_68, desired_left_eye=(0.35, 0.35), 
+                                    desired_face_width=224, desired_face_height=None):
+    """
+    使用仿射变换对齐人脸图像并同时变换关键点
+    
+    参数:
+        face_img: 输入的人脸ROI图像 (BGR格式)
+        landmarks_68: 人脸68个关键点坐标 (形状为(1, 68, 2)或(68, 2)的numpy数组)
+        desired_left_eye: 期望的左眼在输出图像中的相对位置 (x,y)
+        desired_face_width: 输出图像的宽度
+        desired_face_height: 输出图像的高度(如果为None，则与宽度相同)
+    
+    返回:
+        aligned_face: 对齐后的人脸图像
+        aligned_landmarks: 变换后的关键点(形状与输入相同，包含合法性标记)
+        valid_flags: 每个关键点是否合法的布尔数组(True表示合法)
+    """
+    if desired_face_height is None:
+        desired_face_height = desired_face_width
+    
+    # 转换关键点形状为(68, 2)
+    orig_shape = landmarks_68.shape
+    if landmarks_68.ndim == 3 and landmarks_68.shape[0] == 1:
+        landmarks = landmarks_68[0]  # 从(1, 68, 2)变为(68, 2)
+    elif landmarks_68.shape == (68, 2):
+        landmarks = landmarks_68
+    else:
+        raise ValueError(f"Landmarks shape must be (1, 68, 2) or (68, 2), got {landmarks_68.shape}")
+    
+    # 检查关键点是否有效(非负)
+    valid_flags = np.all(landmarks >= 0, axis=1)
+    
+    # 获取左右眼中心坐标(只使用有效的关键点)
+    left_eye_indices = slice(36, 42)
+    right_eye_indices = slice(42, 48)
+    
+    left_eye_points = landmarks[left_eye_indices][valid_flags[left_eye_indices]]
+    right_eye_points = landmarks[right_eye_indices][valid_flags[right_eye_indices]]
+    
+    if len(left_eye_points) < 3 or len(right_eye_points) < 3:
+        raise ValueError("Not enough valid eye landmarks for alignment")
+    
+    left_eye_center = left_eye_points.mean(axis=0).astype("float")
+    right_eye_center = right_eye_points.mean(axis=0).astype("float")
+    
+    # 计算两眼之间的角度
+    dY = right_eye_center[1] - left_eye_center[1]
+    dX = right_eye_center[0] - left_eye_center[0]
+    angle = np.degrees(np.arctan2(dY, dX))
+    
+    # 计算期望的两眼距离
+    desired_right_eye_x = 1.0 - desired_left_eye[0]
+    dist = np.sqrt((dX ** 2) + (dY ** 2))
+    desired_dist = (desired_right_eye_x - desired_left_eye[0])
+    desired_dist *= desired_face_width
+    scale = desired_dist / dist
+    
+    # 获取两眼中心的中点
+    eyes_center = ((left_eye_center[0] + right_eye_center[0]) * 0.5,
+                   (left_eye_center[1] + right_eye_center[1]) * 0.5)
+    
+    # 获取旋转矩阵
+    M = cv2.getRotationMatrix2D(eyes_center, angle, scale)
+    
+    # 更新平移分量
+    tX = desired_face_width * 0.5
+    tY = desired_face_height * desired_left_eye[1]
+    M[0, 2] += (tX - eyes_center[0])
+    M[1, 2] += (tY - eyes_center[1])
+    
+    # 应用仿射变换到图像
+    (w, h) = (desired_face_width, desired_face_height)
+    aligned_face = cv2.warpAffine(face_img, M, (w, h), flags=cv2.INTER_CUBIC)
+    
+    # 准备变换关键点
+    aligned_landmarks = np.zeros_like(landmarks)
+    
+    # 变换每个关键点并更新合法性
+    for i in range(68):
+        if not valid_flags[i]:
+            continue  # 保持原有的无效状态
+            
+        x, y = landmarks[i]
+        transformed_x = M[0, 0] * x + M[0, 1] * y + M[0, 2]
+        transformed_y = M[1, 0] * x + M[1, 1] * y + M[1, 2]
+        
+        # 检查变换后的点是否在图像范围内
+        if (0 <= transformed_x < w) and (0 <= transformed_y < h):
+            aligned_landmarks[i] = [transformed_x, transformed_y]
+        else:
+            valid_flags[i] = False
+            aligned_landmarks[i] = [-1, -1]  # 标记为无效
+    
+    # 恢复原始形状(1, 68, 2)
+    if orig_shape[0] == 1:
+        aligned_landmarks = aligned_landmarks[np.newaxis, ...]
+    
+    return aligned_face, aligned_landmarks, valid_flags
+
+
+def rotation_matrix_to_rpy(R, to_degree = True):
+    R = R.reshape(3, 3)
+    # 计算Pitch (theta)
+    pitch = np.arctan2(-R[2, 0], np.sqrt(R[0, 0]**2 + R[1, 0]**2))
+    # 计算Yaw (psi)
+    yaw = np.arctan2(R[1, 0], R[0, 0])
+    # 计算Roll (phi)
+    roll = np.arctan2(R[2, 1], R[2, 2])
+    if to_degree:
+        roll = np.degrees(roll)
+        pitch = np.degrees(pitch)
+        yaw = np.degrees(yaw)
+    return roll, pitch, yaw
+
+def rpy_to_rotation_maxtrix():
+    
+    return
+
+
+def visualize_rpy_on_image(src, roll_deg, pitch_deg, yaw_deg, scale=50, thickness=1, center=None, text_offset=15, font_scale = 0.3, text_thickness = 1):
+    """
+    在输入图像上可视化 RPY 欧拉角（支持自定义原点）
+    
+    参数:
+        src (np.ndarray): 输入图像 (BGR 格式)
+        roll_deg (float): Roll 角度 (X 轴，红色)
+        pitch_deg (float): Pitch 角度 (Y 轴，绿色)
+        yaw_deg (float): Yaw 角度 (Z 轴，蓝色)
+        scale (int): 坐标轴长度
+        thickness (int): 线条粗细
+        center (tuple): 坐标轴原点 (x, y)，默认图像中心
+        text_offset (int): 文本与箭头的像素偏移
+    
+    返回:
+        np.ndarray: 可视化后的图像
+    """
+    img = src.copy()
+    h, w = img.shape[:2]
+    
+    # 设置原点（默认图像中心）
+    if center is None:
+        center = (w // 2, h // 2)
+    cx, cy = center
+    
+    # 将 RPY 角度转换为弧度
+    roll = np.radians(roll_deg)
+    pitch = np.radians(pitch_deg)
+    yaw = np.radians(yaw_deg)
+    
+    # 计算旋转矩阵 (RPY 顺序: Z -> Y -> X)
+    Rz = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    Ry = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+    R = Rz @ Ry @ Rx
+    
+    # 定义 3D 坐标轴端点 (X, Y, Z)
+    axes = np.float32([
+        [1, 0, 0],  # X 轴 (红色)
+        [0, 1, 0],  # Y 轴 (绿色)
+        [0, 0, 1]   # Z 轴 (蓝色)
+    ]) * scale
+    
+    # 应用旋转矩阵并转换为 2D 坐标
+    rotated_axes = R @ axes.T
+    x_end = (int(rotated_axes[0, 0] + cx), int(rotated_axes[1, 0] + cy))
+    y_end = (int(rotated_axes[0, 1] + cx), int(rotated_axes[1, 1] + cy))
+    z_end = (int(rotated_axes[0, 2] + cx), int(rotated_axes[1, 2] + cy))
+    
+    # 绘制坐标轴
+    cv2.line(img, (cx, cy), x_end, (0, 0, 255), thickness)  # X: 红色 (Roll)
+    cv2.line(img, (cx, cy), y_end, (0, 255, 0), thickness)  # Y: 绿色 (Pitch)
+    cv2.line(img, (cx, cy), z_end, (255, 0, 0), thickness)  # Z: 蓝色 (Yaw)
+    
+    # 在箭头附近标注 RPY 名称和角度°
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img, f"R:{roll_deg:.2f}", 
+                (x_end[0] + text_offset, x_end[1]), 
+                font, font_scale, (0, 0, 255), text_thickness)
+    cv2.putText(img, f"P:{pitch_deg:.2f}", 
+                (y_end[0], y_end[1] + text_offset), 
+                font, font_scale, (0, 255, 0), text_thickness)
+    cv2.putText(img, f"Y:{yaw_deg:.2f}", 
+                (z_end[0] - text_offset, z_end[1] - text_offset), 
+                font, font_scale, (255, 0, 0), text_thickness)
+    
+    return img
+ 
+
+

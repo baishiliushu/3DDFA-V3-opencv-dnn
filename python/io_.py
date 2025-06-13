@@ -44,7 +44,7 @@ def back_resize_ldms(ldms, trans_params):
 
     return ldms
 
-def plot_kpts(image, kpts, color = "g"):
+def plot_kpts(image, kpts, color = "g", index_text = False):
 
     if color == "r":
         c = (255, 0, 0)
@@ -54,7 +54,7 @@ def plot_kpts(image, kpts, color = "g"):
         c = (255, 0, 0)
     image = image.copy()
     kpts = kpts.copy()
-    radius_based_img = max(int(min(image.shape[0], image.shape[1])/200), 3)
+    radius_based_img = max(int(min(image.shape[0], image.shape[1])/400), 2)
     max_x = -1.0
     max_y = -1.0
     min_x = 99999.0
@@ -78,6 +78,8 @@ def plot_kpts(image, kpts, color = "g"):
         st = kpts[i, :]
         #image = cv2.circle(image,(int(st[0]), int(st[1])), radius, c, radius*2)
         image = cv2.circle(image,(int(st[0]), int(st[1])), radius, c, -1)
+        if index_text:
+            image = cv2.putText(image, "{}".format(i), (int(st[0]+radius), int(st[1]+radius)), cv2.FONT_HERSHEY_SIMPLEX, 0.22, (0, 255, 255))
     return image
 
 def show_seg_visble(new_seg_visible_one, img):
@@ -209,7 +211,8 @@ class visualize:
         self.visualize_dict.append(render_shape)
         render_face = ((render_face/255. * render_mask/255. + img[:,:,::-1]/255. * (1 - render_mask/255.))*255).astype(np.uint8)[:,:,::-1]
         self.visualize_dict.append(render_face)
-
+        
+        img_ldm68 = None
         if "ldm68" in self.items:
             ldm68=self.result_dict["ldm68"][0]
             ldm68[:, 1] = 224 -1 - ldm68[:, 1]
@@ -302,6 +305,8 @@ class visualize:
             x_end = x_start + img.shape[1]
             y_end = y_start + img.shape[0]
             img_res[y_start:y_end, x_start:x_end] = image
-
+        
+        if img_ldm68 is not None:
+            cv2.imwrite(os.path.join(save_path, img_name + "_lm68_" + ".jpg"), img_ldm68)
         cv2.imwrite(os.path.join(save_path, img_name + ".jpg"), img_res)
         np.save(os.path.join(save_path, img_name + ".npy"), self.save_dict)
