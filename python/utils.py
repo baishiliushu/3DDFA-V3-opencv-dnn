@@ -286,6 +286,33 @@ def align_face_affine_along_roll(face_img, landmarks_68, desired_left_eye=(0.35,
     return aligned_face, aligned_landmarks, valid_flags
 
 
+def rpy_to_maxtirx_no_tr(roll, pitch, yaw):
+    # 将 RPY 角度转换为弧度
+    roll = np.radians(roll)
+    pitch = np.radians(pitch)
+    yaw = np.radians(yaw)
+    
+    # 计算旋转矩阵 (RPY 顺序: Z -> Y -> X)
+    #TODO: order rotation
+    Rz = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    Ry = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+    R = Rz @ Ry @ Rx
+    print("[DEBUG]rotated based rpy-degree : {}, shape {}\n{}".format(type(R), R.shape, R))
+    return R
+
 def rotation_matrix_to_rpy(R, to_degree = True):
     R = R.reshape(3, 3)
     # 计算Pitch (theta)
@@ -300,12 +327,41 @@ def rotation_matrix_to_rpy(R, to_degree = True):
         yaw = np.degrees(yaw)
     return roll, pitch, yaw
 
-def rpy_to_rotation_maxtrix():
+def rpy_to_rotation_maxtrix(x, y, z):
+    # x -> roll, y -> pitch, z -> yaw
+    batch_size = 1
+    ones = np.ones([batch_size, 1])
+    zeros = np.zeros([batch_size, 1])
     
-    return
+    rot_x = np.concatenate([
+        ones, zeros, zeros,
+        zeros, np.cos(x), -np.sin(x), 
+        zeros, np.sin(x), np.cos(x)
+    ], axis=1).reshape([batch_size, 3, 3])
+    
+    rot_y = np.concatenate([
+        np.cos(y), zeros, np.sin(y),
+        zeros, ones, zeros,
+        -np.sin(y), zeros, np.cos(y)
+    ], axis=1).reshape([batch_size, 3, 3])
+
+    rot_z = np.concatenate([
+        np.cos(z), -np.sin(z), zeros,
+        np.sin(z), np.cos(z), zeros,
+        zeros, zeros, ones
+    ], axis=1).reshape([batch_size, 3, 3])
+
+    rot = rot_z @ rot_y @ rot_x
+    rot = np.transpose(rot, (0, 2, 1))
+    return rot
+
+def transform_matrix_transpose():
+    #TODO: TRG = ORG * rot ; ORG = rot[Tr] * TRG
+
+    return rot
 
 
-def visualize_rpy_on_image(src, roll_deg, pitch_deg, yaw_deg, scale=50, thickness=1, center=None, text_offset=15, font_scale = 0.3, text_thickness = 1):
+def visualize_rpy_on_image(src, R, scale=60, thickness=1, center=None, text_offset=10, font_scale = 0.43, text_thickness = 1, RPYs=[]):
     """
     在输入图像上可视化 RPY 欧拉角（支持自定义原点）
     
@@ -330,29 +386,6 @@ def visualize_rpy_on_image(src, roll_deg, pitch_deg, yaw_deg, scale=50, thicknes
         center = (w // 2, h // 2)
     cx, cy = center
     
-    # 将 RPY 角度转换为弧度
-    roll = np.radians(roll_deg)
-    pitch = np.radians(pitch_deg)
-    yaw = np.radians(yaw_deg)
-    
-    # 计算旋转矩阵 (RPY 顺序: Z -> Y -> X)
-    Rz = np.array([
-        [np.cos(yaw), -np.sin(yaw), 0],
-        [np.sin(yaw), np.cos(yaw), 0],
-        [0, 0, 1]
-    ])
-    Ry = np.array([
-        [np.cos(pitch), 0, np.sin(pitch)],
-        [0, 1, 0],
-        [-np.sin(pitch), 0, np.cos(pitch)]
-    ])
-    Rx = np.array([
-        [1, 0, 0],
-        [0, np.cos(roll), -np.sin(roll)],
-        [0, np.sin(roll), np.cos(roll)]
-    ])
-    R = Rz @ Ry @ Rx
-    
     # 定义 3D 坐标轴端点 (X, Y, Z)
     axes = np.float32([
         [1, 0, 0],  # X 轴 (红色)
@@ -362,9 +395,10 @@ def visualize_rpy_on_image(src, roll_deg, pitch_deg, yaw_deg, scale=50, thicknes
     
     # 应用旋转矩阵并转换为 2D 坐标
     rotated_axes = R @ axes.T
-    x_end = (int(rotated_axes[0, 0] + cx), int(rotated_axes[1, 0] + cy))
-    y_end = (int(rotated_axes[0, 1] + cx), int(rotated_axes[1, 1] + cy))
-    z_end = (int(rotated_axes[0, 2] + cx), int(rotated_axes[1, 2] + cy))
+    print("[DEBUG]rotated_axes : {}, shape {}\n{}".format(type(rotated_axes), rotated_axes.shape, rotated_axes))
+    x_end = (int(rotated_axes[0, 0].astype(int) + cx), int(rotated_axes[1, 0].astype(int) + cy)) #x_end
+    y_end = (int(rotated_axes[0, 1].astype(int) + cx), int(rotated_axes[1, 1].astype(int) + cy)) #y_end
+    z_end = (int(rotated_axes[0, 2].astype(int) + cx), int(rotated_axes[1, 2].astype(int) + cy)) #z_end
     
     # 绘制坐标轴
     cv2.line(img, (cx, cy), x_end, (0, 0, 255), thickness)  # X: 红色 (Roll)
@@ -373,14 +407,25 @@ def visualize_rpy_on_image(src, roll_deg, pitch_deg, yaw_deg, scale=50, thicknes
     
     # 在箭头附近标注 RPY 名称和角度°
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(img, f"R:{roll_deg:.2f}", 
+    roll_deg = -720
+    pitch_deg = -720
+    yaw_deg = -720
+    if len(RPYs) == 3:
+        roll_deg = RPYs[0]
+        pitch_deg = RPYs[1]
+        yaw_deg = RPYs[2]
+    else:
+        roll_deg, pitch_deg, yaw_deg = rotation_matrix_to_rpy(R)
+        print("[DEBUG]visual rpy: {}, {}, {}".format(roll_deg, pitch_deg, yaw_deg))
+    
+    cv2.putText(img, f"R:{ceil(roll_deg)}", 
                 (x_end[0] + text_offset, x_end[1]), 
                 font, font_scale, (0, 0, 255), text_thickness)
-    cv2.putText(img, f"P:{pitch_deg:.2f}", 
-                (y_end[0], y_end[1] + text_offset), 
+    cv2.putText(img, f"P:{ceil(pitch_deg)}", 
+                (y_end[0] - 1, y_end[1] - text_offset), 
                 font, font_scale, (0, 255, 0), text_thickness)
-    cv2.putText(img, f"Y:{yaw_deg:.2f}", 
-                (z_end[0] - text_offset, z_end[1] - text_offset), 
+    cv2.putText(img, f"Y:{ceil(yaw_deg)}", 
+                (z_end[0] + text_offset, z_end[1] + text_offset), 
                 font, font_scale, (255, 0, 0), text_thickness)
     
     return img

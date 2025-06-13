@@ -161,6 +161,7 @@ class face_model:
         Parameters:
             angles           -- np.array, size (B, 3), use radian
         """
+        #TODO: older of RPY; transpose option older 
         batch_size = angles.shape[0]
         ones = np.ones([batch_size, 1])
         zeros = np.zeros([batch_size, 1])
@@ -337,7 +338,8 @@ class face_model:
         alpha = self.net_recon.forward(self.net_recon.getUnconnectedOutLayersNames())[0]
         #alpha = self.net_recon.forward()[0]
         print(f'[INFO] one image forward cost time: {((time.perf_counter()-t1)*1000):.1f} ms')
-        
+        #TODO: means and values of 'alpha'        
+    
         alpha_dict = self.split_alpha(alpha)
         face_shape = self.compute_shape(alpha_dict["id"], alpha_dict["exp"])
         rotation = self.compute_rotation(alpha_dict["angle"])
@@ -373,7 +375,9 @@ class face_model:
             "render_mask": np.transpose(mask, (0, 2, 3, 1)),
             "trans": alpha_dict["trans"],
             "rot": rotation,
-            "transform": face_shape_transformed
+            "transform": face_shape_transformed,
+            #"xyz_rpy": [np.degrees(alpha_dict["angle"][:, :1].item()), np.degrees(alpha_dict["angle"][:, 1:2].item()), np.degrees(alpha_dict["angle"][:, 2:].item())]
+            "xyz_rpy": [-np.degrees(alpha_dict["angle"][:, 2:].item()), -np.degrees(alpha_dict["angle"][:, :1].item()), -np.degrees(alpha_dict["angle"][:, 1:2].item())]
             }
 
         # compute visible vertice according to normal and renderer
