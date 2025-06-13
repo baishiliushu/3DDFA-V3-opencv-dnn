@@ -4,11 +4,20 @@ os.environ["KMP_DUPLICATE_LIB_OK"]="True"
 import time
 import numpy as np
 
+
 from face_reconstruction import face_model
 from utils import align_img, align_face_affine_along_roll
 from io_ import visualize
-from utils import rotation_matrix_to_rpy, visualize_rpy_on_image
+from utils import rotation_matrix_to_rpy, rpy_to_maxtirx_no_tr, visualize_rpy_on_image
 
+def make_affine_result_visual(results, aligned_landmarks):
+    results_affine = results
+    aligned_landmarks = aligned_landmarks[0]
+    aligned_landmarks[:, 1] = srcimg.shape[0] - 1 - aligned_landmarks[:,1]
+    aligned_landmarks = aligned_landmarks[np.newaxis, ...]
+    
+    results_affine["ldm68"] = aligned_landmarks
+    return results_affine
 
 def get_lm3d_std():
     lm3d_std = np.array([[-0.31148657, 0.29036078, 0.13377953],
@@ -62,7 +71,7 @@ if __name__=='__main__':
     recon_model, args = init_recon()
     
     #1. input - prepare
-    imgpath = "testimgs/3_det.jpg"
+    imgpath = "testimgs/13.jpeg"
     srcimg = cv2.imread(imgpath)
     im, trans_params = prepare_recon_face(srcimg)
     
@@ -82,18 +91,22 @@ if __name__=='__main__':
     print("[INFO]save at : {}".format(save_path))
     
     
-    #affine_file_name = img_name + "_affine_" 
-    #aligned_face, aligned_landmarks, valid_flags = align_face_affine_along_roll(srcimg, ldm68_results)
-    #my_visualize.visualize_and_output(trans_params, aligned_face, save_path, affine_file_name)
+    affine_file_name = img_name + "_wrap" 
+    affine_face, aligned_landmarks, valid_flags = align_face_affine_along_roll(srcimg, ldm68_results)
+    results_affine = make_affine_result_visual(results, aligned_landmarks)
+    affine_visualize = visualize(results_affine, args)
+    affine_visualize.visualize_and_output(None, affine_face, save_path, affine_file_name)
     
     r, p, y = rotation_matrix_to_rpy(results["rot"])
+    
     print("[DEBUG]trans : {}, {}, {}\nrot : {}, {}, {}\ntransform : {}, {}, {}".format(type(results["trans"]), results["trans"].shape, results["trans"],type(results["rot"]), results["rot"].shape, results["rot"], type(results["transform"]), results["transform"].shape, results["transform"]))
+    print("[DEBUG]R:{}, P:{}, Y:{} v.s. R:{}, P:{}, Y:{} ({})".format(r, p, y, results["xyz_rpy"][0], results["xyz_rpy"][1], results["xyz_rpy"][2], type(results["xyz_rpy"][0])))
     
     centre_index = 30
     centre_point = ldm68_results[0][centre_index, :]
     centre_point = (int(centre_point[0]), int(centre_point[1]))
-    print("[INFO]R:{}, P:{}, Y:{}".format(r, p, y))
-    img_axis = visualize_rpy_on_image(srcimg, r, p, y, center=centre_point)
+    rot_matrix_visual = rpy_to_maxtirx_no_tr(results["xyz_rpy"][0], results["xyz_rpy"][1], results["xyz_rpy"][2]) #results["rot"]
+    img_axis = visualize_rpy_on_image(srcimg, rot_matrix_visual)
     cv2.imwrite("{}.jpg".format(os.path.join(save_path, img_name + "_rpy_")), img_axis)
     
     
