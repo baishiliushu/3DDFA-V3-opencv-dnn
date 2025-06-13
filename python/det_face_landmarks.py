@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from utils import priorbox, decode, decode_landm, align_img
+from utils import priorbox, decode, decode_landm, align_img, get_expend_box
 
 
 class retinaface:
@@ -113,35 +113,15 @@ class retinaface:
         landmarks = []
         for i in range(boxes.shape[0]):
             x1, y1, x2, y2 = boxes[i, :]
-            w = x2 - x1 + 1
-            h = y2 - y1 + 1
-
-            cx = (x2 + x1) * 0.5
-            cy = (y2 + y1) * 0.5
-            sz = max(h, w) * self.enlarge_ratio
-
-            x1 = cx - sz * 0.5
-            y1 = cy - sz * 0.5
-            trans_x1 = x1
-            trans_y1 = y1
-            x2 = x1 + sz
-            y2 = y1 + sz
-
-            dx = max(0, -x1)
-            dy = max(0, -y1)
-            x1 = max(0, x1)
-            y1 = max(0, y1)
-
-            edx = max(0, x2 - width)
-            edy = max(0, y2 - height)
-            x2 = min(width, x2)
-            y2 = min(height, y2)
+            dy, edy, dx, edx, sz , trans_x1, trans_y1 = get_expend_box(x1, y1, x2, y2, self.enlarge_ratio, height, width)
 
             crop_img = rgb_image[int(y1):int(y2), int(x1):int(x2), :]
             if dx > 0 or dy > 0 or edx > 0 or edy > 0:
                 crop_img = cv2.copyMakeBorder(crop_img, int(dy), int(edy), int(dx), int(edx), cv2.BORDER_CONSTANT, value=(103.94, 116.78, 123.68))
             crop_img = cv2.resize(crop_img, (self.lmks_inputsize, self.lmks_inputsize))
-
+            
+            #cv2.imwrite(f"/home/leon/work_c_p_p/githubs/3ddfa-v3/3DDFA-V3-opencv-dnn/python/testimgs/9_before_aglin-0-{i}.jpg", cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+            
             base_lmks = self.process_img(crop_img)
             inv_scale = sz / self.lmks_inputsize
 
@@ -186,6 +166,8 @@ class retinaface:
                                               value=(103.94, 116.78, 123.68))
             crop_img = cv2.resize(crop_img, (self.lmks_inputsize, self.lmks_inputsize))
 
+            #cv2.imwrite(f"/home/leon/work_c_p_p/githubs/3ddfa-v3/3DDFA-V3-opencv-dnn/python/testimgs/9_before_aglin-1-{i}.jpg", cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+            
             base_lmks = self.process_img(crop_img)
             inv_scale = sz / self.lmks_inputsize
 
