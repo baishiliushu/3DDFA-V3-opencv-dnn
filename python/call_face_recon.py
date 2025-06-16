@@ -10,6 +10,7 @@ from utils import align_img, align_face_affine_along_roll
 from io_ import visualize
 from utils import rotation_matrix_to_rpy, rpy_to_maxtirx_no_tr, visualize_rpy_on_image
 
+
 def make_affine_result_visual(results, aligned_landmarks):
     results_affine = results
     aligned_landmarks = aligned_landmarks[0]
@@ -71,7 +72,7 @@ if __name__=='__main__':
     recon_model, args = init_recon()
     
     #1. input - prepare
-    imgpath = "testimgs/13.jpeg"
+    imgpath = "testimgs/17.jpg"
     srcimg = cv2.imread(imgpath)
     im, trans_params = prepare_recon_face(srcimg)
     
@@ -97,15 +98,17 @@ if __name__=='__main__':
     affine_visualize = visualize(results_affine, args)
     affine_visualize.visualize_and_output(None, affine_face, save_path, affine_file_name)
     
-    r, p, y = rotation_matrix_to_rpy(results["rot"])
+    r, p, y = rotation_matrix_to_rpy(results["rot"]) # for debug rotation matrix
     
-    print("[DEBUG]trans : {}, {}, {}\nrot : {}, {}, {}\ntransform : {}, {}, {}".format(type(results["trans"]), results["trans"].shape, results["trans"],type(results["rot"]), results["rot"].shape, results["rot"], type(results["transform"]), results["transform"].shape, results["transform"]))
-    print("[DEBUG]R:{}, P:{}, Y:{} v.s. R:{}, P:{}, Y:{} ({})".format(r, p, y, results["xyz_rpy"][0], results["xyz_rpy"][1], results["xyz_rpy"][2], type(results["xyz_rpy"][0])))
+    print("[DEBUG]trans : {}, {}, {}\nrot : {}, {},\n {}\ntransform : {}, {}, {}".format(type(results["trans"]), results["trans"].shape, results["trans"],type(results["rot"]), results["rot"].shape, results["rot"], type(results["transform"]), results["transform"].shape, results["transform"]))
+    
+    rpy_based_model = [results["xyz_rpy"][0], results["xyz_rpy"][1], results["xyz_rpy"][2]] # results["xyz_pyr"] results["xyz_rpy"]
+    print("[DEBUG]R:{}, P:{}, Y:{} v.s. R:{}, P:{}, Y:{} ({})".format(r, p, y, rpy_based_model[0], rpy_based_model[1], rpy_based_model[2], type(rpy_based_model[0])))
     
     centre_index = 30
     centre_point = ldm68_results[0][centre_index, :]
     centre_point = (int(centre_point[0]), int(centre_point[1]))
-    rot_matrix_visual = rpy_to_maxtirx_no_tr(results["xyz_rpy"][0], results["xyz_rpy"][1], results["xyz_rpy"][2]) #results["rot"]
+    rot_matrix_visual = rpy_to_maxtirx_no_tr(rpy_based_model[0], rpy_based_model[1], rpy_based_model[2]) 
     img_axis = visualize_rpy_on_image(srcimg, rot_matrix_visual)
     cv2.imwrite("{}.jpg".format(os.path.join(save_path, img_name + "_rpy_")), img_axis)
     
