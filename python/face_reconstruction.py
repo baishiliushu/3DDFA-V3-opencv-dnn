@@ -376,8 +376,8 @@ class face_model:
             "trans": alpha_dict["trans"],
             "rot": rotation,
             "transform": face_shape_transformed,
-            #"xyz_rpy": [np.degrees(alpha_dict["angle"][:, :1].item()), np.degrees(alpha_dict["angle"][:, 1:2].item()), np.degrees(alpha_dict["angle"][:, 2:].item())]
-            "xyz_rpy": [-np.degrees(alpha_dict["angle"][:, 2:].item()), -np.degrees(alpha_dict["angle"][:, :1].item()), -np.degrees(alpha_dict["angle"][:, 1:2].item())]
+            "xyz_pyr": [np.degrees(alpha_dict["angle"][:, :1].item()), np.degrees(alpha_dict["angle"][:, 1:2].item()), np.degrees(alpha_dict["angle"][:, 2:].item())],
+            "xyz_rpy": [np.degrees(alpha_dict["angle"][:, 2:].item()), np.degrees(alpha_dict["angle"][:, :1].item()), np.degrees(alpha_dict["angle"][:, 1:2].item())]
             }
 
         # compute visible vertice according to normal and renderer
