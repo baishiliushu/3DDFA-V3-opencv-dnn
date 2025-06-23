@@ -315,7 +315,15 @@ def rpy_to_maxtirx_no_tr(roll, pitch, yaw):
     return R
 
 def rotation_matrix_to_rpy(R, to_degree = True):
-    R = R.reshape(3, 3)
+    print("[DEBUG]--maxtirx {} to euler-angle".format(R.shape))
+    if R.shape == (1, 3, 3):
+        print("[INFO]original rot-matrix in results has been TRANSPONSED")
+        R = np.transpose(R, (0, 2, 1))
+        R = R.reshape(3, 3)
+    else:
+        R = np.transpose(R)
+    
+    print("[DEBUG]++maxtirx {} to euler-angle".format(R.shape))
     # 计算Pitch (theta)
     #pitch = np.arctan2(-R[2, 0], np.sqrt(R[0, 0]**2 + R[1, 0]**2))
     # 计算Yaw (psi)
@@ -365,15 +373,41 @@ def transform_matrix_transpose():
     return rot
 
 
-def visualize_rpy_on_image(src, R, scale=60, thickness=1, center=None, text_offset=10, font_scale = 0.43, text_thickness = 1, RPYs=[]):
+def orientation_max_map_2D(unit_3D, R, cx = 112, cy = 112):
+    # 应用旋转矩阵并转换为 2D 坐标
+    if R.shape == (1, 3, 3):
+        R = R.reshape(3, 3)
+        #np.expand_dims(R, axis=1)
+    rotated_axes =  unit_3D @ R #rotated_axes = R @ unit_3D.T
+    print("[DEBUG]rotated_axes : {}, shape {}\n{}".format(type(rotated_axes), rotated_axes.shape, rotated_axes))
+    x_end = (int(rotated_axes[0, 0].astype(int) + cx), int(rotated_axes[1, 0].astype(int) + cy)) #x_end
+    y_end = (int(rotated_axes[0, 1].astype(int) + cx), int(rotated_axes[1, 1].astype(int) + cy)) #y_end
+    z_end = (int(rotated_axes[0, 2].astype(int) + cx), int(rotated_axes[1, 2].astype(int) + cy)) #z_end
+    
+    return x_end, y_end, z_end
+
+def orientation_jacobian_map_2D(unit_3D, R, size_H = 224, size_W = 224, trans_x = 0, trans_y = 0, trans_z = 0):
+    unit_3D[..., -1] = (10.0 - unit_3D[..., -1])
+    # unit_3D = unit_3D[..., :1] / unit_3D[..., 1:]
+    R = np.eye(3)
+    print("INPUT : {}\n{}\norts : {}\n{}".format(R.shape, R, unit_3D.shape, unit_3D))
+    trans = np.array([[trans_x, trans_y, trans_z]], dtype="double")
+
+
+    camera_matrix = np.array([1015.0, 0, 112.0, 0, 1015.0, 112.0, 0, 0, 1], dtype=np.float32).reshape((3, 3)) #.T
+    dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion 
+    print("[DEBUG]dist {} {}\npersc_proj : {} \n{}".format(dist_coeffs, dist_coeffs.shape, camera_matrix.shape, camera_matrix))
+    imgpts, jac = cv2.projectPoints(unit_3D, R, trans, camera_matrix, dist_coeffs)
+    print("[DEBUG]end-points {} \n{}\njacobian {}\n{}".format(imgpts.shape, imgpts, jac, jac.shape))
+    return tuple(imgpts[0].astype(int).ravel()), tuple(imgpts[1].astype(int).ravel()), tuple(imgpts[2].astype(int).ravel())
+
+def visualize_rpy_on_image(src, R, scale=1, thickness=1, center=None, text_offset=5, font_scale = 0.43, text_thickness = 1, RPYs=[]):
     """
     在输入图像上可视化 RPY 欧拉角（支持自定义原点）
     
     参数:
         src (np.ndarray): 输入图像 (BGR 格式)
-        roll_deg (float): Roll 角度 (X 轴，红色)
-        pitch_deg (float): Pitch 角度 (Y 轴，绿色)
-        yaw_deg (float): Yaw 角度 (Z 轴，蓝色)
+        R(np.ndarry <1*3*3> or <3*3, by rpy>): rotaion matrix (has been transposed, A ROT B -> matA @ AtoB.T)
         scale (int): 坐标轴长度
         thickness (int): 线条粗细
         center (tuple): 坐标轴原点 (x, y)，默认图像中心
@@ -393,19 +427,16 @@ def visualize_rpy_on_image(src, R, scale=60, thickness=1, center=None, text_offs
     # 定义 3D 坐标轴端点 (X, Y, Z)
     axes = np.float32([
         [1, 0, 0],  # X 轴 (红色)
-        [0, 1, 0],  # Y 轴 (绿色)
+        [0, -1, 0],  # Y 轴 (绿色)
         [0, 0, 1]   # Z 轴 (蓝色)
     ]) * scale
 
     print("xyz org: ({}, {}) , ({}, {}), ({}, {})".format(axes.T[0, 0].astype(int), axes.T[1, 0].astype(int),
 axes.T[0, 1].astype(int),axes.T[1, 1].astype(int), axes.T[0, 2].astype(int), axes.T[1, 2].astype(int)))
-    # 应用旋转矩阵并转换为 2D 坐标
-    rotated_axes = R @ axes.T
-    print("[DEBUG]rotated_axes : {}, shape {}\n{}".format(type(rotated_axes), rotated_axes.shape, rotated_axes))
-    x_end = (int(rotated_axes[0, 0].astype(int) + cx), int(rotated_axes[1, 0].astype(int) + cy)) #x_end
-    y_end = (int(rotated_axes[0, 1].astype(int) + cx), int(rotated_axes[1, 1].astype(int) + cy)) #y_end
-    z_end = (int(rotated_axes[0, 2].astype(int) + cx), int(rotated_axes[1, 2].astype(int) + cy)) #z_end
-    
+
+    #x_end, y_end, z_end = orientation_rot_map_2D(axes, R, cx, cy)
+    x_end, y_end, z_end = orientation_jacobian_map_2D(axes, R)
+    print("x: {} ({}), y: {}({}), z:{}({})".format(x_end, type(x_end), y_end, type(y_end), z_end, type(z_end)))
     # 绘制坐标轴
     cv2.line(img, (cx, cy), x_end, (0, 0, 255), thickness)  # X: 红色 (Pitch)
     cv2.line(img, (cx, cy), y_end, (0, 255, 0), thickness)  # Y: 绿色 (Yaw)
@@ -425,13 +456,13 @@ axes.T[0, 1].astype(int),axes.T[1, 1].astype(int), axes.T[0, 2].astype(int), axe
         print("[DEBUG]visual rpy: {}, {}, {}".format(roll_deg, pitch_deg, yaw_deg))
     
     cv2.putText(img, f"P:{ceil(pitch_deg)}", 
-                (x_end[0] + text_offset, x_end[1]), 
+                (x_end[0] - text_offset, x_end[1] + text_offset), 
                 font, font_scale, (0, 0, 255), text_thickness)
     cv2.putText(img, f"Y:{ceil(yaw_deg)}", 
-                (y_end[0] - 1, y_end[1] - text_offset), 
+                (y_end[0] + text_offset, y_end[1] + text_offset), 
                 font, font_scale, (0, 255, 0), text_thickness)
     cv2.putText(img, f"R:{ceil(roll_deg)}", 
-                (z_end[0] + text_offset, z_end[1] + text_offset), 
+                (z_end[0] + text_offset, z_end[1] - text_offset), 
                 font, font_scale, (255, 0, 0), text_thickness)
     
     return img

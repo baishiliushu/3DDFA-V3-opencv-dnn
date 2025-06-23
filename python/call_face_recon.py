@@ -72,7 +72,10 @@ if __name__=='__main__':
     recon_model, args = init_recon()
     
     #1. input - prepare
-    imgpath = "testimgs/17.jpg"
+    imgpath = "testimgs/21.jpg"
+    #TODO: argv    
+    print("[INFO]run on : {}".format(imgpath))
+    
     srcimg = cv2.imread(imgpath)
     im, trans_params = prepare_recon_face(srcimg)
     
@@ -108,7 +111,9 @@ if __name__=='__main__':
     centre_index = 30
     centre_point = ldm68_results[0][centre_index, :]
     centre_point = (int(centre_point[0]), int(centre_point[1]))
-    rot_matrix_visual = rpy_to_maxtirx_no_tr(rpy_based_model[0], rpy_based_model[1], rpy_based_model[2]) 
+    #rot_matrix_visual = rpy_to_maxtirx_no_tr(rpy_based_model[0], rpy_based_model[1], rpy_based_model[2])
+    rot_matrix_visual = results["rot"]
+
     img_axis = visualize_rpy_on_image(srcimg, rot_matrix_visual)
     cv2.imwrite("{}.jpg".format(os.path.join(save_path, img_name + "_rpy_")), img_axis)
     

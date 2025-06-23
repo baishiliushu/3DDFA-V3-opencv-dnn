@@ -337,9 +337,9 @@ class face_model:
         t1 = time.perf_counter()
         alpha = self.net_recon.forward(self.net_recon.getUnconnectedOutLayersNames())[0]
         #alpha = self.net_recon.forward()[0]
-        print(f'[INFO] one image forward cost time: {((time.perf_counter()-t1)*1000):.1f} ms')
+        print(f'[INFO] one image forward cost time: {((time.perf_counter()-t1)*1000):.1f} ms, length : {alpha.shape}')
         #TODO: means and values of 'alpha'        
-    
+        
         alpha_dict = self.split_alpha(alpha)
         face_shape = self.compute_shape(alpha_dict["id"], alpha_dict["exp"])
         rotation = self.compute_rotation(alpha_dict["angle"])
