@@ -364,6 +364,7 @@ class face_model:
         gray_shading = self.compute_gray_shading_with_directionlight(np.ones_like(face_albedo)*0.78, face_norm_roted)
         mask, _, pred_image_shape, _ = self.renderer.forward(v3d.copy(), self.tri, gray_shading.copy())
         
+        print("[DEBUG]--------------------(pyr)type {} \n shape {}\n value : {}------------------------------".format(type(alpha_dict["angle"]),alpha_dict["angle"].shape, alpha_dict["angle"], ))
         result_dict = {
             "v3d": v3d,
             "v2d": v2d,
